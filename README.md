@@ -1,12 +1,13 @@
-# Microservicios con Spring Boot, Eureka, API Gateway y Config Server
+# Microservicios con Spring Boot, Eureka, API Gateway, Config Server y Seguridad JWT
 
-Este proyecto demuestra una arquitectura mínima de microservicios con:
+Este proyecto demuestra una arquitectura de microservicios con seguridad integrada utilizando JWT (JSON Web Tokens) para proteger endpoints. Se apoya en los siguientes componentes:
 
 - ✅ Spring Cloud Config Server
 - ✅ Eureka Service Discovery
 - ✅ Spring Cloud Gateway (API Gateway)
-- ✅ Múltiples microservicios (Product, Order)
+- ✅ Múltiples microservicios (Auth, Product, Order)
 - ✅ Configuración centralizada en un repositorio local
+- ✅ Seguridad con JWT implementada en auth-service y propagada a través del API Gateway
 
 ---
 
@@ -17,49 +18,24 @@ microservicesExample/
 ├── config-repo/                 # Configuraciones centralizadas (.properties)
 ├── config-server/               # Spring Cloud Config Server
 ├── eureka-server/               # Eureka Discovery Server
-├── api-gateway/                 # API Gateway
-├── product-service/             # Microservicio de productos
+├── api-gateway/                 # API Gateway con rutas y validación de tokens
+├── auth-service/                # Servicio de autenticación y emisión de JWT
+├── product-service/             # Microservicio de productos (protegido con JWT)
 └── order-service/               # Microservicio de pedidos
 ```
 
 ---
 
-## 📦 Dependencias clave por módulo
+## 📆 Configuración centralizada
 
-### ✅ API Gateway (`pom.xml`)
-```xml
-<dependency>
-    <groupId>org.springframework.cloud</groupId>
-    <artifactId>spring-cloud-starter-gateway</artifactId>
-</dependency>
-<dependency>
-    <groupId>org.springframework.cloud</groupId>
-    <artifactId>spring-cloud-starter-netflix-eureka-client</artifactId>
-</dependency>
-<dependency>
-    <groupId>org.springframework.cloud</groupId>
-    <artifactId>spring-cloud-starter-config</artifactId>
-</dependency>
-<dependency>
-    <groupId>org.springframework.cloud</groupId>
-    <artifactId>spring-cloud-starter-bootstrap</artifactId>
-</dependency>
-```
-
-**❗ Importante:** _No incluir `spring-boot-starter-web` en el gateway._
-
----
-
-## 🔧 Configuración por microservicio
-
-### ✅ `bootstrap.properties` en cada microservicio
+### `bootstrap.properties` en cada microservicio
 ```properties
 spring.application.name=nombre-del-servicio
 spring.cloud.config.uri=http://localhost:8888
 spring.config.import=configserver:
 ```
 
-### ✅ `config-repo/{nombre-del-servicio}.properties`
+### `config-repo/{nombre-del-servicio}.properties`
 ```properties
 server.port=puerto
 spring.application.name=nombre-del-servicio
@@ -68,7 +44,7 @@ eureka.client.service-url.defaultZone=http://localhost:8761/eureka
 
 ---
 
-## 🌐 Enrutamiento en el API Gateway (config-repo/api-gateway.properties)
+## 🌐 Enrutamiento en el API Gateway
 
 ```properties
 server.port=8080
@@ -84,37 +60,70 @@ spring.cloud.gateway.routes[0].predicates[0]=Path=/products/**
 spring.cloud.gateway.routes[1].id=order-service
 spring.cloud.gateway.routes[1].uri=lb://order-service
 spring.cloud.gateway.routes[1].predicates[0]=Path=/orders/**
+
+spring.cloud.gateway.routes[2].id=auth-service
+spring.cloud.gateway.routes[2].uri=lb://auth-service
+spring.cloud.gateway.routes[2].predicates[0]=Path=/auth/**
 ```
 
 ---
 
-## 🚀 Cómo ejecutar
+## 🔐 Seguridad con JWT
 
-1. Iniciar el `config-server`
-2. Iniciar el `eureka-server`
-3. Iniciar `product-service` y `order-service`
-4. Iniciar el `api-gateway`
-5. Visitar:
-   - `http://localhost:8080/products`
-   - `http://localhost:8080/orders`
-   - `http://localhost:8761` (Eureka dashboard)
+- El `auth-service` expone un endpoint `/auth/login` para recibir credenciales y emitir tokens JWT.
+- Los tokens se generan con `jjwt` y contienen el nombre del usuario.
+- El `api-gateway` y los microservicios validan el JWT en las cabeceras `Authorization`.
+- Las rutas protegidas requieren el token; `/auth/**` está exento para permitir login.
+
+Ejemplo de login:
+```http
+POST /auth/login HTTP/1.1
+Content-Type: application/json
+{
+  "username": "user",
+  "password": "password"
+}
+```
+Respuesta:
+```json
+{
+  "token": "eyJhbGciOi..."
+}
+```
+
+Peticiones posteriores deben incluir:
+```http
+Authorization: Bearer eyJhbGciOi...
+```
 
 ---
 
-## ✅ Verificación rápida
+## 🚀 Ejecución del proyecto
+
+1. Iniciar `config-server`
+2. Iniciar `eureka-server`
+3. Iniciar `auth-service`
+4. Iniciar `product-service` y `order-service`
+5. Iniciar `api-gateway`
+6. Acceder vía gateway:
+   - `http://localhost:8080/products`
+   - `http://localhost:8080/orders`
+   - `http://localhost:8080/auth/login`
+   - `http://localhost:8761` (dashboard de Eureka)
+
+---
+
+## 🔍 Verificación rápida
 
 | Componente       | Puerto | URL                        |
 |------------------|--------|----------------------------|
 | Config Server    | 8888   | http://localhost:8888      |
 | Eureka Server    | 8761   | http://localhost:8761      |
 | API Gateway      | 8080   | http://localhost:8080      |
+| Auth Service     | 8083   | http://localhost:8083      |
 | Product Service  | 8081   | http://localhost:8081      |
 | Order Service    | 8082   | http://localhost:8082      |
 
 ---
 
-## 🧼 Limpieza de errores comunes
-
-- 🔥 **No usar spring-cloud-starter-gateway-mvc**
-- ❌ No mezclar Web y WebFlux en Gateway
-- ❗ Siempre reiniciar servicios tras editar config-repo
+Este proyecto sirve como base para sistemas distribuidos seguros con Spring Cloud. Ideal para demostraciones profesionales y entrevistas técnicas.
